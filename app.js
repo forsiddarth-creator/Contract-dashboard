@@ -1,7 +1,7 @@
 // Authentication Configuration
 const AUTH_CONFIG = {
     username: 'Equipment',
-    password: 'contract@2025',
+    password: 'contract2025',
     sessionDuration: 8 * 60 * 60 * 1000
 };
 
