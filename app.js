@@ -10,6 +10,7 @@ class ContractDashboard {
     }
 
     init() {
+        // Wait for libraries to load before initializing
         if (typeof XLSX === 'undefined' || typeof Chart === 'undefined') {
             console.log('Waiting for libraries to load...');
             setTimeout(() => this.init(), 500);
@@ -26,7 +27,6 @@ class ContractDashboard {
             const fileInput = document.getElementById('fileInput');
             const fileUploadArea = document.getElementById('fileUploadArea');
             const processDataBtn = document.getElementById('processDataBtn');
-            const searchInput = document.getElementById('searchInput');
 
             if (!fileInput || !fileUploadArea || !processDataBtn) {
                 console.error('Required elements not found');
@@ -59,10 +59,6 @@ class ContractDashboard {
             processDataBtn.addEventListener('click', () => {
                 this.processContractData().catch(err => this.showError('Data processing error: ' + err.message));
             });
-
-            if (searchInput) {
-                searchInput.addEventListener('input', (e) => this.filterTable(e.target.value));
-            }
 
         } catch (error) {
             console.error('Error setting up event listeners:', error);
@@ -401,4 +397,148 @@ class ContractDashboard {
                     datasets: [{
                         label: 'Number of Contracts',
                         data: Object.values(bucketCounts),
-                        backgroundColor: Object.keys(buc
+                        backgroundColor: Object.keys(bucketCounts).map(bucket => colors[bucket] || '#666666')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    onClick: function(event, elements) {
+                        try {
+                            if (elements && elements.length > 0) {
+                                const elementIndex = elements[0].index;
+                                const clickedCategory = self.chart.data.labels[elementIndex];
+                                
+                                // Toggle filter
+                                if (self.activeFilter === clickedCategory) {
+                                    self.clearFilter();
+                                } else {
+                                    self.filterTableByCategory(clickedCategory);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error handling chart click:', error);
+                        }
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error creating chart:', error);
+            this.showError('Error creating chart: ' + error.message);
+        }
+    }
+
+    filterTableByCategory(category) {
+        try {
+            this.activeFilter = category;
+            this.updateTable();
+            console.log('Filtered by:', category);
+        } catch (error) {
+            console.error('Error filtering table:', error);
+        }
+    }
+
+    clearFilter() {
+        try {
+            this.activeFilter = null;
+            this.updateTable();
+            console.log('Filter cleared');
+        } catch (error) {
+            console.error('Error clearing filter:', error);
+        }
+    }
+
+    updateTable() {
+        try {
+            const tbody = document.getElementById('tableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            const dataToShow = this.activeFilter 
+                ? this.processedData.filter(row => row.bucket === this.activeFilter)
+                : this.processedData;
+            
+            dataToShow.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                const firstColumn = Object.keys(row).find(key => 
+                    key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
+                );
+                
+                tr.innerHTML = `
+                    <td>${row[firstColumn] || 'N/A'}</td>
+                    <td>${row.expiry_date}</td>
+                    <td>${row.days_left}</td>
+                    <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Update header
+            const tableHeader = document.querySelector('.table-section h3');
+            if (tableHeader) {
+                if (this.activeFilter) {
+                    tableHeader.textContent = `${this.activeFilter} Contracts (${dataToShow.length} items) - Click chart bars to filter`;
+                } else {
+                    tableHeader.textContent = `All Contracts (${this.processedData.length} items) - Click chart bars to filter`;
+                }
+            }
+        } catch (error) {
+            console.error('Error updating table:', error);
+        }
+    }
+
+    showError(message) {
+        try {
+            console.error('Dashboard Error:', message);
+            const errorMessage = document.getElementById('errorMessage');
+            const errorSection = document.getElementById('errorSection');
+            
+            if (errorMessage && errorSection) {
+                errorMessage.textContent = message;
+                errorSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error showing error message:', error);
+        }
+    }
+
+    hideError() {
+        try {
+            const errorSection = document.getElementById('errorSection');
+            if (errorSection) {
+                errorSection.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error hiding error message:', error);
+        }
+    }
+}
+
+// Initialize the dashboard when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        console.log('Initializing Contract Dashboard...');
+        new ContractDashboard();
+    } catch (error) {
+        console.error('Failed to initialize dashboard:', error);
+        
+        // Show error message to user
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 20px; left: 20px; right: 20px; background: #fee2e2; color: #dc2626; padding: 16px; border-radius: 8px; z-index: 1000; font-family: Arial, sans-serif;';
+        errorDiv.innerHTML = `<strong>Dashboard Error:</strong> ${error.message}<br><small>Please refresh the page and try again.</small>`;
+        document.body.appendChild(errorDiv);
+    }
+});
+
+// Global error handler for unhandled promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    event.preventDefault(); // Prevent the default browser error handling
+});
