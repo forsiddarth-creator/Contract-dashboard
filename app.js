@@ -1,201 +1,427 @@
+// Authentication Configuration
+const AUTH_CONFIG = {
+    username: 'Equipment',
+    password: 'contract@2025',
+    sessionDuration: 8 * 60 * 60 * 1000
+};
+
 class ContractDashboard {
     constructor() {
         this.data = [];
         this.processedData = [];
         this.chart = null;
         this.currentDate = new Date();
-        this.activeFilter = null; // Track which category is currently filtered
+        this.activeFilter = null;
+        this.isAuthenticated = false;
         
         this.init();
     }
 
     init() {
+        // Check if user is already logged in
+        this.checkAuthStatus();
+        
+        // Setup authentication event listeners
+        this.setupAuthListeners();
+        
+        // If authenticated, initialize dashboard
+        if (this.isAuthenticated) {
+            this.initializeDashboard();
+        }
+    }
+
+    checkAuthStatus() {
+        const authData = localStorage.getItem('contractDashboardAuth');
+        if (authData) {
+            try {
+                const { timestamp, authenticated } = JSON.parse(authData);
+                const now = new Date().getTime();
+                
+                // Check if session is still valid (8 hours)
+                if (authenticated && (now - timestamp) < AUTH_CONFIG.sessionDuration) {
+                    this.isAuthenticated = true;
+                    this.showDashboard();
+                    console.log('User already authenticated');
+                } else {
+                    // Session expired
+                    localStorage.removeItem('contractDashboardAuth');
+                    this.showLogin();
+                }
+            } catch (error) {
+                console.error('Error parsing auth data:', error);
+                this.showLogin();
+            }
+        } else {
+            this.showLogin();
+        }
+    }
+
+    setupAuthListeners() {
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        }
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+    }
+
+    handleLogin(event) {
+        event.preventDefault();
+        
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorDiv = document.getElementById('loginError');
+
+        // Simple authentication check
+        if (username === AUTH_CONFIG.username && password === AUTH_CONFIG.password) {
+            // Store authentication status
+            const authData = {
+                authenticated: true,
+                timestamp: new Date().getTime()
+            };
+            localStorage.setItem('contractDashboardAuth', JSON.stringify(authData));
+            
+            this.isAuthenticated = true;
+            this.showDashboard();
+            this.initializeDashboard();
+            
+            console.log('Login successful');
+        } else {
+            // Show error
+            errorDiv.classList.remove('hidden');
+            errorDiv.textContent = 'Invalid username or password. Please try again.';
+            
+            // Clear form
+            document.getElementById('password').value = '';
+            
+            console.log('Login failed');
+        }
+    }
+
+    handleLogout() {
+        // Clear authentication
+        localStorage.removeItem('contractDashboardAuth');
+        this.isAuthenticated = false;
+        
+        // Reset dashboard state
+        this.data = [];
+        this.processedData = [];
+        if (this.chart) {
+            this.chart.destroy();
+            this.chart = null;
+        }
+        
+        // Show login screen
+        this.showLogin();
+        
+        console.log('User logged out');
+    }
+
+    showLogin() {
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('mainDashboard').classList.add('hidden');
+        
+        // Clear any error messages
+        const errorDiv = document.getElementById('loginError');
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+        
+        // Clear form fields
+        const usernameField = document.getElementById('username');
+        const passwordField = document.getElementById('password');
+        if (usernameField) usernameField.value = '';
+        if (passwordField) passwordField.value = '';
+    }
+
+    showDashboard() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('mainDashboard').classList.remove('hidden');
+    }
+
+    initializeDashboard() {
+        // Wait for libraries to load before initializing
+        if (typeof XLSX === 'undefined' || typeof Chart === 'undefined') {
+            console.log('Waiting for libraries to load...');
+            setTimeout(() => this.initializeDashboard(), 500);
+            return;
+        }
+        
         this.setupEventListeners();
         this.displayCurrentDate();
+        console.log('Dashboard initialized successfully!');
     }
 
     setupEventListeners() {
-        const fileInput = document.getElementById('fileInput');
-        const fileUploadArea = document.getElementById('fileUploadArea');
-        const processDataBtn = document.getElementById('processDataBtn');
-        const searchInput = document.getElementById('searchInput');
+        try {
+            const fileInput = document.getElementById('fileInput');
+            const fileUploadArea = document.getElementById('fileUploadArea');
+            const processDataBtn = document.getElementById('processDataBtn');
+            const searchInput = document.getElementById('searchInput');
 
-        fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        
-        fileUploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            fileUploadArea.classList.add('dragover');
-        });
-        
-        fileUploadArea.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            fileUploadArea.classList.remove('dragover');
-        });
-        
-        fileUploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            fileUploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                this.processFile(files[0]);
+            if (!fileInput || !fileUploadArea || !processDataBtn) {
+                console.error('Required elements not found');
+                return;
             }
-        });
 
-        processDataBtn.addEventListener('click', () => this.processContractData());
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileSelect(e).catch(err => this.showError('File selection error: ' + err.message));
+            });
+            
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.add('dragover');
+            });
+            
+            fileUploadArea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('dragover');
+            });
+            
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processFile(files[0]).catch(err => this.showError('File processing error: ' + err.message));
+                }
+            });
 
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => this.filterTable(e.target.value));
+            processDataBtn.addEventListener('click', () => {
+                this.processContractData().catch(err => this.showError('Data processing error: ' + err.message));
+            });
+
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => this.filterTable(e.target.value));
+            }
+
+        } catch (error) {
+            console.error('Error setting up event listeners:', error);
+            this.showError('Failed to initialize dashboard: ' + error.message);
         }
     }
 
     displayCurrentDate() {
-        const options = { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        };
-        document.getElementById('currentDate').textContent = 
-            this.currentDate.toLocaleDateString('en-US', options);
-    }
-
-    handleFileSelect(event) {
-        const file = event.target.files[0];
-        if (file) {
-            this.processFile(file);
+        try {
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                dateElement.textContent = this.currentDate.toLocaleDateString('en-US', options);
+            }
+        } catch (error) {
+            console.error('Error displaying date:', error);
         }
     }
 
-    processFile(file) {
-        if (!file.name.match(/\.(xlsx|xls)$/)) {
-            this.showError('Please upload a valid Excel file (.xlsx or .xls)');
-            return;
+    async handleFileSelect(event) {
+        try {
+            const file = event.target.files[0];
+            if (file) {
+                await this.processFile(file);
+            }
+        } catch (error) {
+            console.error('Error handling file selection:', error);
+            throw error;
         }
+    }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
+    async processFile(file) {
+        return new Promise((resolve, reject) => {
             try {
-                const workbook = XLSX.read(e.target.result, { type: 'binary' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                const data = XLSX.utils.sheet_to_json(worksheet);
+                if (!file.name.match(/\.(xlsx|xls)$/)) {
+                    reject(new Error('Please upload a valid Excel file (.xlsx or .xls)'));
+                    return;
+                }
+
+                if (typeof XLSX === 'undefined') {
+                    reject(new Error('XLSX library not loaded. Please refresh the page.'));
+                    return;
+                }
+
+                const reader = new FileReader();
                 
-                this.data = data;
-                this.showFileInfo(file, data.length);
-                this.populateColumnSelect(data);
-                this.hideError();
+                reader.onload = (e) => {
+                    try {
+                        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const data = XLSX.utils.sheet_to_json(worksheet);
+                        
+                        if (!data || data.length === 0) {
+                            reject(new Error('Excel file is empty or has no data'));
+                            return;
+                        }
+                        
+                        this.data = data;
+                        this.showFileInfo(file, data.length);
+                        this.populateColumnSelect(data);
+                        this.hideError();
+                        resolve(data);
+                        
+                    } catch (error) {
+                        console.error('Error parsing Excel file:', error);
+                        reject(new Error('Error reading Excel file: ' + error.message));
+                    }
+                };
+
+                reader.onerror = () => {
+                    reject(new Error('Error reading file'));
+                };
+
+                reader.readAsBinaryString(file);
                 
             } catch (error) {
-                this.showError('Error reading Excel file: ' + error.message);
+                console.error('Error in processFile:', error);
+                reject(error);
             }
-        };
-        reader.readAsBinaryString(file);
+        });
     }
 
     showFileInfo(file, rowCount) {
-        const fileInfo = document.getElementById('fileInfo');
-        fileInfo.innerHTML = `
-            <strong>File loaded:</strong> ${file.name}<br>
-            <strong>Rows:</strong> ${rowCount}
-        `;
-        fileInfo.classList.remove('hidden');
+        try {
+            const fileInfo = document.getElementById('fileInfo');
+            if (fileInfo) {
+                fileInfo.innerHTML = `
+                    <strong>File loaded:</strong> ${file.name}<br>
+                    <strong>Rows:</strong> ${rowCount}
+                `;
+                fileInfo.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error showing file info:', error);
+        }
     }
 
     populateColumnSelect(data) {
-        if (data.length === 0) return;
-        
-        const select = document.getElementById('dateColumnSelect');
-        const columns = Object.keys(data[0]);
-        
-        select.innerHTML = '<option value="">Choose a column...</option>';
-        
-        columns.forEach(column => {
-            const option = document.createElement('option');
-            option.value = column;
-            option.textContent = column;
-            select.appendChild(option);
-        });
-        
-        select.addEventListener('change', () => {
-            const processBtn = document.getElementById('processDataBtn');
-            processBtn.disabled = !select.value;
-        });
-        
-        document.getElementById('columnSection').classList.remove('hidden');
+        try {
+            if (data.length === 0) return;
+            
+            const select = document.getElementById('dateColumnSelect');
+            if (!select) return;
+            
+            const columns = Object.keys(data[0]);
+            
+            select.innerHTML = '<option value="">Choose a column...</option>';
+            
+            columns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column;
+                select.appendChild(option);
+            });
+            
+            select.addEventListener('change', () => {
+                const processBtn = document.getElementById('processDataBtn');
+                if (processBtn) {
+                    processBtn.disabled = !select.value;
+                }
+            });
+            
+            const columnSection = document.getElementById('columnSection');
+            if (columnSection) {
+                columnSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error populating column select:', error);
+            this.showError('Error setting up column selection: ' + error.message);
+        }
     }
 
     parseDate(dateStr) {
-        if (!dateStr) return null;
-        
-        if (typeof dateStr === 'number') {
-            return new Date((dateStr - 25569) * 86400 * 1000);
-        }
-        
-        dateStr = String(dateStr).trim();
-        let date = null;
-        
-        if (dateStr.match(/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/)) {
-            const parts = dateStr.split(/[-\/]/);
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10);
-            const year = parseInt(parts[2], 10);
+        try {
+            if (!dateStr) return null;
             
-            if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
-                date = new Date(year, month - 1, day);
+            if (typeof dateStr === 'number') {
+                return new Date((dateStr - 25569) * 86400 * 1000);
             }
+            
+            dateStr = String(dateStr).trim();
+            let date = null;
+            
+            if (dateStr.match(/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/)) {
+                const parts = dateStr.split(/[-\/]/);
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+                
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+                    date = new Date(year, month - 1, day);
+                }
+            }
+            else if (dateStr.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+                date = new Date(dateStr);
+            }
+            else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                date = new Date(dateStr);
+            }
+            else {
+                date = new Date(dateStr);
+            }
+            
+            if (date && !isNaN(date.getTime())) {
+                return date;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error parsing date:', dateStr, error);
+            return null;
         }
-        else if (dateStr.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-            date = new Date(dateStr);
-        }
-        else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-            date = new Date(dateStr);
-        }
-        else {
-            date = new Date(dateStr);
-        }
-        
-        if (date && !isNaN(date.getTime())) {
-            return date;
-        }
-        
-        return null;
     }
 
-    processContractData() {
-        const selectedColumn = document.getElementById('dateColumnSelect').value;
-        if (!selectedColumn) return;
+    async processContractData() {
+        return new Promise((resolve, reject) => {
+            try {
+                const selectedColumn = document.getElementById('dateColumnSelect');
+                if (!selectedColumn || !selectedColumn.value) {
+                    reject(new Error('Please select a date column'));
+                    return;
+                }
 
-        try {
-            this.processedData = [];
-            
-            this.data.forEach((row, index) => {
-                const expiryDateStr = row[selectedColumn];
-                const expiryDate = this.parseDate(expiryDateStr);
+                const columnValue = selectedColumn.value;
+                this.processedData = [];
                 
-                if (!expiryDate) {
-                    throw new Error(`Invalid date in row ${index + 1}: ${expiryDateStr}. Please use DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD format.`);
+                for (let i = 0; i < this.data.length; i++) {
+                    const row = this.data[i];
+                    const expiryDateStr = row[columnValue];
+                    const expiryDate = this.parseDate(expiryDateStr);
+                    
+                    if (!expiryDate) {
+                        reject(new Error(`Invalid date in row ${i + 1}: ${expiryDateStr}. Please use DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD format.`));
+                        return;
+                    }
+                    
+                    const daysLeft = Math.ceil((expiryDate - this.currentDate) / (1000 * 60 * 60 * 24));
+                    const bucket = this.categorizeContract(daysLeft);
+                    
+                    this.processedData.push({
+                        ...row,
+                        expiry_date: expiryDate.toLocaleDateString(),
+                        days_left: daysLeft,
+                        bucket: bucket,
+                        priority: this.getPriority(bucket)
+                    });
                 }
                 
-                const daysLeft = Math.ceil((expiryDate - this.currentDate) / (1000 * 60 * 60 * 24));
-                const bucket = this.categorizeContract(daysLeft);
+                this.activeFilter = null;
+                this.updateDashboard();
+                this.hideError();
+                resolve(this.processedData);
                 
-                this.processedData.push({
-                    ...row,
-                    expiry_date: expiryDate.toLocaleDateString(),
-                    days_left: daysLeft,
-                    bucket: bucket,
-                    priority: this.getPriority(bucket)
-                });
-            });
-            
-            // Reset any active filters when new data is processed
-            this.activeFilter = null;
-            this.updateDashboard();
-            this.hideError();
-            
-        } catch (error) {
-            this.showError('Error processing data: ' + error.message);
-        }
+            } catch (error) {
+                console.error('Error processing contract data:', error);
+                reject(error);
+            }
+        });
     }
 
     categorizeContract(daysLeft) {
@@ -216,209 +442,194 @@ class ContractDashboard {
     }
 
     updateDashboard() {
-        this.updateSummaryCards();
-        this.updateChart();
-        this.updateTable();
-        this.addFilterControls();
-        
-        document.getElementById('dashboardSection').classList.remove('hidden');
+        try {
+            this.updateSummaryCards();
+            this.updateChart();
+            this.updateTable();
+            
+            const dashboardSection = document.getElementById('dashboardSection');
+            if (dashboardSection) {
+                dashboardSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error updating dashboard:', error);
+            this.showError('Error updating dashboard: ' + error.message);
+        }
     }
 
     updateSummaryCards() {
-        const counts = {
-            expired: 0,
-            urgent: 0,
-            medium: 0,
-            low: 0
-        };
-        
-        this.processedData.forEach(row => {
-            counts[row.priority]++;
-        });
-        
-        document.getElementById('expiredCount').textContent = counts.expired;
-        document.getElementById('urgentCount').textContent = counts.urgent;
-        document.getElementById('mediumCount').textContent = counts.medium;
-        document.getElementById('lowCount').textContent = counts.low;
+        try {
+            const counts = {
+                expired: 0,
+                urgent: 0,
+                medium: 0,
+                low: 0
+            };
+            
+            this.processedData.forEach(row => {
+                if (counts.hasOwnProperty(row.priority)) {
+                    counts[row.priority]++;
+                }
+            });
+            
+            const elements = {
+                expiredCount: counts.expired,
+                urgentCount: counts.urgent,
+                mediumCount: counts.medium,
+                lowCount: counts.low
+            };
+            
+            Object.keys(elements).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = elements[id];
+                }
+            });
+        } catch (error) {
+            console.error('Error updating summary cards:', error);
+        }
     }
 
-    // 🎯 ENHANCED: Interactive chart with click events
     updateChart() {
-        const ctx = document.getElementById('contractChart').getContext('2d');
-        
-        if (this.chart) {
-            this.chart.destroy();
-        }
-        
-        const bucketCounts = {};
-        this.processedData.forEach(row => {
-            bucketCounts[row.bucket] = (bucketCounts[row.bucket] || 0) + 1;
-        });
-        
-        const colors = {
-            'Expired': '#dc2626',
-            '0-90 days': '#f59e0b',
-            '91-180 days': '#d97706',
-            '>180 days': '#059669'
-        };
-        
-        // Create active colors (darker versions for selected bars)
-        const activeColors = {
-            'Expired': '#b91c1c',
-            '0-90 days': '#d97706',
-            '91-180 days': '#b45309',
-            '>180 days': '#047857'
-        };
-        
-        this.chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: Object.keys(bucketCounts),
-                datasets: [{
-                    label: 'Number of Contracts',
-                    data: Object.values(bucketCounts),
-                    backgroundColor: Object.keys(bucketCounts).map(bucket => 
-                        this.activeFilter === bucket ? activeColors[bucket] : colors[bucket]
-                    ),
-                    borderColor: Object.keys(bucketCounts).map(bucket => 
-                        this.activeFilter === bucket ? '#1f2937' : 'transparent'
-                    ),
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
+        try {
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js library not loaded');
+                return;
+            }
+
+            const canvas = document.getElementById('contractChart');
+            if (!canvas) {
+                console.error('Chart canvas not found');
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            
+            if (this.chart) {
+                this.chart.destroy();
+                this.chart = null;
+            }
+            
+            const bucketCounts = {};
+            this.processedData.forEach(row => {
+                bucketCounts[row.bucket] = (bucketCounts[row.bucket] || 0) + 1;
+            });
+            
+            if (Object.keys(bucketCounts).length === 0) {
+                console.log('No data to display in chart');
+                return;
+            }
+            
+            const colors = {
+                'Expired': '#dc2626',
+                '0-90 days': '#f59e0b',
+                '91-180 days': '#d97706',
+                '>180 days': '#059669'
+            };
+            
+            const self = this;
+            
+            this.chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(bucketCounts),
+                    datasets: [{
+                        label: 'Number of Contracts',
+                        data: Object.values(bucketCounts),
+                        backgroundColor: Object.keys(bucketCounts).map(bucket => colors[bucket] || '#666666')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
                     },
-                    tooltip: {
-                        callbacks: {
-                            afterLabel: (context) => {
-                                return 'Click to filter table';
+                    onClick: function(event, elements) {
+                        try {
+                            if (elements && elements.length > 0) {
+                                const elementIndex = elements[0].index;
+                                const clickedCategory = self.chart.data.labels[elementIndex];
+                                
+                                // Toggle filter
+                                if (self.activeFilter === clickedCategory) {
+                                    self.clearFilter();
+                                } else {
+                                    self.filterTableByCategory(clickedCategory);
+                                }
                             }
+                        } catch (error) {
+                            console.error('Error handling chart click:', error);
                         }
-                    }
-                },
-                // 🎯 ADD CLICK FUNCTIONALITY
-                onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const elementIndex = elements[0].index;
-                        const clickedCategory = this.chart.data.labels[elementIndex];
-                        
-                        // Toggle filter: if same category clicked, clear filter
-                        if (this.activeFilter === clickedCategory) {
-                            this.clearFilter();
-                        } else {
-                            this.setFilter(clickedCategory);
-                        }
-                    } else {
-                        // Clicked on empty area, clear filter
-                        this.clearFilter();
-                    }
-                },
-                interaction: {
-                    intersect: false
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
                     }
                 }
-            }
-        });
-    }
-
-    // 🎯 NEW: Set filter for specific category
-    setFilter(category) {
-        this.activeFilter = category;
-        this.updateChart(); // Refresh chart with highlighted bar
-        this.updateTable(); // Filter table
-        this.updateFilterStatus();
-    }
-
-    // 🎯 NEW: Clear all filters
-    clearFilter() {
-        this.activeFilter = null;
-        this.updateChart(); // Refresh chart without highlighting
-        this.updateTable(); // Show all data
-        this.updateFilterStatus();
-    }
-
-    // 🎯 NEW: Add filter status and clear button
-    addFilterControls() {
-        if (!document.getElementById('filterControls')) {
-            const tableSection = document.querySelector('.table-section .card__body');
-            const filterDiv = document.createElement('div');
-            filterDiv.id = 'filterControls';
-            filterDiv.className = 'filter-controls';
-            filterDiv.innerHTML = `
-                <div id="filterStatus" class="filter-status hidden">
-                    Showing contracts: <span id="filterCategory"></span>
-                    <button id="clearFilterBtn" class="btn-clear">Show All</button>
-                </div>
-            `;
-            
-            // Insert before the search input
-            const searchInput = document.getElementById('searchInput');
-            tableSection.insertBefore(filterDiv, searchInput.parentNode);
-            
-            // Add event listener to clear button
-            document.getElementById('clearFilterBtn').addEventListener('click', () => {
-                this.clearFilter();
             });
+            
+        } catch (error) {
+            console.error('Error creating chart:', error);
+            this.showError('Error creating chart: ' + error.message);
         }
     }
 
-    // 🎯 NEW: Update filter status display
-    updateFilterStatus() {
-        const filterStatus = document.getElementById('filterStatus');
-        const filterCategory = document.getElementById('filterCategory');
-        
-        if (this.activeFilter) {
-            filterCategory.textContent = this.activeFilter;
-            filterStatus.classList.remove('hidden');
-        } else {
-            filterStatus.classList.add('hidden');
+    filterTableByCategory(category) {
+        try {
+            this.activeFilter = category;
+            this.updateTable();
+            console.log('Filtered by:', category);
+        } catch (error) {
+            console.error('Error filtering table:', error);
         }
     }
 
-    // 🎯 ENHANCED: Table with optional filtering
+    clearFilter() {
+        try {
+            this.activeFilter = null;
+            this.updateTable();
+            console.log('Filter cleared');
+        } catch (error) {
+            console.error('Error clearing filter:', error);
+        }
+    }
+
     updateTable() {
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        
-        // Filter data if a category is selected
-        const dataToShow = this.activeFilter 
-            ? this.processedData.filter(row => row.bucket === this.activeFilter)
-            : this.processedData;
-        
-        dataToShow.forEach(row => {
-            const tr = document.createElement('tr');
+        try {
+            const tbody = document.getElementById('tableBody');
+            if (!tbody) return;
             
-            const firstColumn = Object.keys(row).find(key => 
-                key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
-            );
+            tbody.innerHTML = '';
             
-            tr.innerHTML = `
-                <td>${row[firstColumn] || 'N/A'}</td>
-                <td>${row.expiry_date}</td>
-                <td>${row.days_left}</td>
-                <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
-            `;
-            tbody.appendChild(tr);
-        });
+            const dataToShow = this.activeFilter 
+                ? this.processedData.filter(row => row.bucket === this.activeFilter)
+                : this.processedData;
+            
+            dataToShow.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                const firstColumn = Object.keys(row).find(key => 
+                    key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
+                );
+                
+                tr.innerHTML = `
+                    <td>${row[firstColumn] || 'N/A'}</td>
+                    <td>${row.expiry_date}</td>
+                    <td>${row.days_left}</td>
+                    <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
 
-        // Update table header to show count
-        const tableHeader = document.querySelector('.table-section h3');
-        const totalCount = this.activeFilter 
-            ? dataToShow.length 
-            : this.processedData.length;
-        
-        if (this.activeFilter) {
-            tableHeader.textContent = `Contract Details - ${this.activeFilter} (${totalCount} contracts)`;
-        } else {
-            tableHeader.textContent = `Contract Details (${totalCount} contracts)`;
+            // Update header
+            const tableHeader = document.querySelector('.table-section h3');
+            if (tableHeader) {
+                if (this.activeFilter) {
+                    tableHeader.textContent = `${this.activeFilter} Contracts (${dataToShow.length} items) - Click chart bars to filter`;
+                } else {
+                    tableHeader.textContent = `All Contracts (${this.processedData.length} items) - Click chart bars to filter`;
+                }
+            }
+        } catch (error) {
+            console.error('Error updating table:', error);
         }
     }
 
@@ -432,16 +643,50 @@ class ContractDashboard {
     }
 
     showError(message) {
-        document.getElementById('errorMessage').textContent = message;
-        document.getElementById('errorSection').classList.remove('hidden');
+        try {
+            console.error('Dashboard Error:', message);
+            const errorMessage = document.getElementById('errorMessage');
+            const errorSection = document.getElementById('errorSection');
+            
+            if (errorMessage && errorSection) {
+                errorMessage.textContent = message;
+                errorSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error showing error message:', error);
+        }
     }
 
     hideError() {
-        document.getElementById('errorSection').classList.add('hidden');
+        try {
+            const errorSection = document.getElementById('errorSection');
+            if (errorSection) {
+                errorSection.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error hiding error message:', error);
+        }
     }
 }
 
 // Initialize the dashboard when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    new ContractDashboard();
+    try {
+        console.log('Initializing Protected Contract Dashboard...');
+        new ContractDashboard();
+    } catch (error) {
+        console.error('Failed to initialize dashboard:', error);
+        
+        // Show error message to user
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 20px; left: 20px; right: 20px; background: #fee2e2; color: #dc2626; padding: 16px; border-radius: 8px; z-index: 1000; font-family: Arial, sans-serif;';
+        errorDiv.innerHTML = `<strong>Dashboard Error:</strong> ${error.message}<br><small>Please refresh the page and try again.</small>`;
+        document.body.appendChild(errorDiv);
+    }
+});
+
+// Global error handler for unhandled promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    event.preventDefault(); // Prevent the default browser error handling
 });
