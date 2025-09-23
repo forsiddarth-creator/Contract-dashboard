@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0">
     <title>Contract Expiry Tracking Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -76,4 +76,46 @@
 
             <!-- Chart Section -->
             <div class="chart-section card">
-                <div class="card
+                <div class="card__body">
+                    <h3>Contract Distribution</h3>
+                    <canvas id="contractChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Data Table Section -->
+            <div class="table-section card">
+                <div class="card__body">
+                    <h3>Contract Details</h3>
+                    <div class="table-controls">
+                        <input type="text" id="searchInput" placeholder="Search contracts..." class="search-input">
+                    </div>
+                    <div class="table-container">
+                        <table id="contractTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Contract</th>
+                                    <th>Expiry Date</th>
+                                    <th>Days Left</th>
+                                    <th>Priority</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Section -->
+        <section id="errorSection" class="error-section card hidden">
+            <div class="card__body">
+                <h3>⚠️ Error</h3>
+                <p id="errorMessage"></p>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
