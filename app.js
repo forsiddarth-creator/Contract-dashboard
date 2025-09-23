@@ -5,12 +5,12 @@ class ContractDashboard {
         this.chart = null;
         this.currentDate = new Date();
         this.activeFilter = null;
+        this.displayColumn = null;
         
         this.init();
     }
 
     init() {
-        // Wait for libraries to load before initializing
         if (typeof XLSX === 'undefined' || typeof Chart === 'undefined') {
             console.log('Waiting for libraries to load...');
             setTimeout(() => this.init(), 500);
@@ -27,6 +27,7 @@ class ContractDashboard {
             const fileInput = document.getElementById('fileInput');
             const fileUploadArea = document.getElementById('fileUploadArea');
             const processDataBtn = document.getElementById('processDataBtn');
+            const searchInput = document.getElementById('searchInput');
 
             if (!fileInput || !fileUploadArea || !processDataBtn) {
                 console.error('Required elements not found');
@@ -59,6 +60,10 @@ class ContractDashboard {
             processDataBtn.addEventListener('click', () => {
                 this.processContractData().catch(err => this.showError('Data processing error: ' + err.message));
             });
+
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => this.filterTable(e.target.value));
+            }
 
         } catch (error) {
             console.error('Error setting up event listeners:', error);
@@ -124,7 +129,7 @@ class ContractDashboard {
                         
                         this.data = data;
                         this.showFileInfo(file, data.length);
-                        this.populateColumnSelect(data);
+                        this.populateColumnSelects(data);
                         this.hideError();
                         resolve(data);
                         
@@ -162,37 +167,72 @@ class ContractDashboard {
         }
     }
 
-    populateColumnSelect(data) {
+    // 🔧 FIXED: This function was not populating both dropdowns correctly
+    populateColumnSelects(data) {
         try {
             if (data.length === 0) return;
             
-            const select = document.getElementById('dateColumnSelect');
-            if (!select) return;
+            const dateSelect = document.getElementById('dateColumnSelect');
+            const displaySelect = document.getElementById('displayColumnSelect');
+            
+            if (!dateSelect || !displaySelect) {
+                console.error('Column select elements not found');
+                return;
+            }
             
             const columns = Object.keys(data[0]);
+            console.log('Available columns:', columns); // Debug log
             
-            select.innerHTML = '<option value="">Choose a column...</option>';
+            // Clear existing options
+            dateSelect.innerHTML = '<option value="">Choose expiry date column...</option>';
+            displaySelect.innerHTML = '<option value="">Choose what to display in table...</option>';
             
+            // Populate both dropdowns with all available columns
             columns.forEach(column => {
-                const option = document.createElement('option');
-                option.value = column;
-                option.textContent = column;
-                select.appendChild(option);
+                // Add to date column select
+                const dateOption = document.createElement('option');
+                dateOption.value = column;
+                dateOption.textContent = column;
+                dateSelect.appendChild(dateOption);
+                
+                // Add to display column select
+                const displayOption = document.createElement('option');
+                displayOption.value = column;
+                displayOption.textContent = column;
+                displaySelect.appendChild(displayOption);
             });
             
-            select.addEventListener('change', () => {
+            console.log('Date select options:', dateSelect.children.length);
+            console.log('Display select options:', displaySelect.children.length);
+            
+            // Add event listeners for validation
+            const validateSelections = () => {
                 const processBtn = document.getElementById('processDataBtn');
                 if (processBtn) {
-                    processBtn.disabled = !select.value;
+                    const isValid = dateSelect.value && displaySelect.value;
+                    processBtn.disabled = !isValid;
+                    console.log('Validation - Date column:', dateSelect.value, 'Display column:', displaySelect.value, 'Valid:', isValid);
                 }
-            });
+            };
             
+            // Remove any existing event listeners to prevent duplicates
+            dateSelect.removeEventListener('change', validateSelections);
+            displaySelect.removeEventListener('change', validateSelections);
+            
+            // Add fresh event listeners
+            dateSelect.addEventListener('change', validateSelections);
+            displaySelect.addEventListener('change', validateSelections);
+            
+            // Show the column selection section
             const columnSection = document.getElementById('columnSection');
             if (columnSection) {
                 columnSection.classList.remove('hidden');
             }
+            
+            console.log('Column selects populated successfully');
+            
         } catch (error) {
-            console.error('Error populating column select:', error);
+            console.error('Error populating column selects:', error);
             this.showError('Error setting up column selection: ' + error.message);
         }
     }
@@ -242,18 +282,27 @@ class ContractDashboard {
     async processContractData() {
         return new Promise((resolve, reject) => {
             try {
-                const selectedColumn = document.getElementById('dateColumnSelect');
-                if (!selectedColumn || !selectedColumn.value) {
-                    reject(new Error('Please select a date column'));
+                const dateColumn = document.getElementById('dateColumnSelect');
+                const displayColumn = document.getElementById('displayColumnSelect');
+                
+                if (!dateColumn || !dateColumn.value) {
+                    reject(new Error('Please select an expiry date column'));
+                    return;
+                }
+                
+                if (!displayColumn || !displayColumn.value) {
+                    reject(new Error('Please select a display column'));
                     return;
                 }
 
-                const columnValue = selectedColumn.value;
+                const dateColumnValue = dateColumn.value;
+                const displayColumnValue = displayColumn.value;
+                this.displayColumn = displayColumnValue;
                 this.processedData = [];
                 
                 for (let i = 0; i < this.data.length; i++) {
                     const row = this.data[i];
-                    const expiryDateStr = row[columnValue];
+                    const expiryDateStr = row[dateColumnValue];
                     const expiryDate = this.parseDate(expiryDateStr);
                     
                     if (!expiryDate) {
@@ -266,12 +315,17 @@ class ContractDashboard {
                     
                     this.processedData.push({
                         ...row,
+                        sl_no: i + 1,
+                        display_value: row[displayColumnValue] || 'N/A',
                         expiry_date: expiryDate.toLocaleDateString(),
                         days_left: daysLeft,
                         bucket: bucket,
                         priority: this.getPriority(bucket)
                     });
                 }
+                
+                // Update table header
+                this.updateTableHeader();
                 
                 this.activeFilter = null;
                 this.updateDashboard();
@@ -283,6 +337,17 @@ class ContractDashboard {
                 reject(error);
             }
         });
+    }
+
+    updateTableHeader() {
+        try {
+            const dynamicHeader = document.getElementById('dynamicHeader');
+            if (dynamicHeader && this.displayColumn) {
+                dynamicHeader.textContent = this.displayColumn;
+            }
+        } catch (error) {
+            console.error('Error updating table header:', error);
+        }
     }
 
     categorizeContract(daysLeft) {
@@ -464,15 +529,12 @@ class ContractDashboard {
                 ? this.processedData.filter(row => row.bucket === this.activeFilter)
                 : this.processedData;
             
-            dataToShow.forEach(row => {
+            dataToShow.forEach((row, index) => {
                 const tr = document.createElement('tr');
                 
-                const firstColumn = Object.keys(row).find(key => 
-                    key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
-                );
-                
                 tr.innerHTML = `
-                    <td>${row[firstColumn] || 'N/A'}</td>
+                    <td>${index + 1}</td>
+                    <td>${row.display_value}</td>
                     <td>${row.expiry_date}</td>
                     <td>${row.days_left}</td>
                     <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
@@ -492,6 +554,15 @@ class ContractDashboard {
         } catch (error) {
             console.error('Error updating table:', error);
         }
+    }
+
+    filterTable(searchTerm) {
+        const rows = document.querySelectorAll('#tableBody tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const visible = text.includes(searchTerm.toLowerCase());
+            row.style.display = visible ? '' : 'none';
+        });
     }
 
     showError(message) {
