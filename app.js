@@ -4,6 +4,7 @@ class ContractDashboard {
         this.processedData = [];
         this.chart = null;
         this.currentDate = new Date();
+        this.activeFilter = null; // Track which category is currently filtered
         
         this.init();
     }
@@ -123,50 +124,36 @@ class ContractDashboard {
         document.getElementById('columnSection').classList.remove('hidden');
     }
 
-    // 🔧 FIXED: Smart date parsing function that handles multiple formats
     parseDate(dateStr) {
         if (!dateStr) return null;
         
-        // Handle Excel numeric dates (days since 1900-01-01)
         if (typeof dateStr === 'number') {
             return new Date((dateStr - 25569) * 86400 * 1000);
         }
         
-        // Convert to string and clean it
         dateStr = String(dateStr).trim();
-        
-        // Try different date formats
         let date = null;
         
-        // Format 1: DD-MM-YYYY or DD/MM/YYYY
         if (dateStr.match(/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/)) {
             const parts = dateStr.split(/[-\/]/);
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10);
             const year = parseInt(parts[2], 10);
             
-            // Validate date components
             if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
-                date = new Date(year, month - 1, day); // month is 0-indexed
+                date = new Date(year, month - 1, day);
             }
         }
-        
-        // Format 2: YYYY-MM-DD (ISO format)
         else if (dateStr.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
             date = new Date(dateStr);
         }
-        
-        // Format 3: MM/DD/YYYY (US format)
         else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
             date = new Date(dateStr);
         }
-        
-        // Format 4: Try standard Date parsing as fallback
         else {
             date = new Date(dateStr);
         }
         
-        // Check if date is valid
         if (date && !isNaN(date.getTime())) {
             return date;
         }
@@ -201,6 +188,8 @@ class ContractDashboard {
                 });
             });
             
+            // Reset any active filters when new data is processed
+            this.activeFilter = null;
             this.updateDashboard();
             this.hideError();
             
@@ -230,6 +219,7 @@ class ContractDashboard {
         this.updateSummaryCards();
         this.updateChart();
         this.updateTable();
+        this.addFilterControls();
         
         document.getElementById('dashboardSection').classList.remove('hidden');
     }
@@ -252,6 +242,7 @@ class ContractDashboard {
         document.getElementById('lowCount').textContent = counts.low;
     }
 
+    // 🎯 ENHANCED: Interactive chart with click events
     updateChart() {
         const ctx = document.getElementById('contractChart').getContext('2d');
         
@@ -271,6 +262,14 @@ class ContractDashboard {
             '>180 days': '#059669'
         };
         
+        // Create active colors (darker versions for selected bars)
+        const activeColors = {
+            'Expired': '#b91c1c',
+            '0-90 days': '#d97706',
+            '91-180 days': '#b45309',
+            '>180 days': '#047857'
+        };
+        
         this.chart = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -278,7 +277,13 @@ class ContractDashboard {
                 datasets: [{
                     label: 'Number of Contracts',
                     data: Object.values(bucketCounts),
-                    backgroundColor: Object.keys(bucketCounts).map(bucket => colors[bucket])
+                    backgroundColor: Object.keys(bucketCounts).map(bucket => 
+                        this.activeFilter === bucket ? activeColors[bucket] : colors[bucket]
+                    ),
+                    borderColor: Object.keys(bucketCounts).map(bucket => 
+                        this.activeFilter === bucket ? '#1f2937' : 'transparent'
+                    ),
+                    borderWidth: 2
                 }]
             },
             options: {
@@ -286,20 +291,111 @@ class ContractDashboard {
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: (context) => {
+                                return 'Click to filter table';
+                            }
+                        }
+                    }
+                },
+                // 🎯 ADD CLICK FUNCTIONALITY
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const elementIndex = elements[0].index;
+                        const clickedCategory = this.chart.data.labels[elementIndex];
+                        
+                        // Toggle filter: if same category clicked, clear filter
+                        if (this.activeFilter === clickedCategory) {
+                            this.clearFilter();
+                        } else {
+                            this.setFilter(clickedCategory);
+                        }
+                    } else {
+                        // Clicked on empty area, clear filter
+                        this.clearFilter();
+                    }
+                },
+                interaction: {
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
                     }
                 }
             }
         });
     }
 
+    // 🎯 NEW: Set filter for specific category
+    setFilter(category) {
+        this.activeFilter = category;
+        this.updateChart(); // Refresh chart with highlighted bar
+        this.updateTable(); // Filter table
+        this.updateFilterStatus();
+    }
+
+    // 🎯 NEW: Clear all filters
+    clearFilter() {
+        this.activeFilter = null;
+        this.updateChart(); // Refresh chart without highlighting
+        this.updateTable(); // Show all data
+        this.updateFilterStatus();
+    }
+
+    // 🎯 NEW: Add filter status and clear button
+    addFilterControls() {
+        if (!document.getElementById('filterControls')) {
+            const tableSection = document.querySelector('.table-section .card__body');
+            const filterDiv = document.createElement('div');
+            filterDiv.id = 'filterControls';
+            filterDiv.className = 'filter-controls';
+            filterDiv.innerHTML = `
+                <div id="filterStatus" class="filter-status hidden">
+                    Showing contracts: <span id="filterCategory"></span>
+                    <button id="clearFilterBtn" class="btn-clear">Show All</button>
+                </div>
+            `;
+            
+            // Insert before the search input
+            const searchInput = document.getElementById('searchInput');
+            tableSection.insertBefore(filterDiv, searchInput.parentNode);
+            
+            // Add event listener to clear button
+            document.getElementById('clearFilterBtn').addEventListener('click', () => {
+                this.clearFilter();
+            });
+        }
+    }
+
+    // 🎯 NEW: Update filter status display
+    updateFilterStatus() {
+        const filterStatus = document.getElementById('filterStatus');
+        const filterCategory = document.getElementById('filterCategory');
+        
+        if (this.activeFilter) {
+            filterCategory.textContent = this.activeFilter;
+            filterStatus.classList.remove('hidden');
+        } else {
+            filterStatus.classList.add('hidden');
+        }
+    }
+
+    // 🎯 ENHANCED: Table with optional filtering
     updateTable() {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         
-        this.processedData.forEach(row => {
+        // Filter data if a category is selected
+        const dataToShow = this.activeFilter 
+            ? this.processedData.filter(row => row.bucket === this.activeFilter)
+            : this.processedData;
+        
+        dataToShow.forEach(row => {
             const tr = document.createElement('tr');
             
-            // Get first column that's not the date fields we added
             const firstColumn = Object.keys(row).find(key => 
                 key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
             );
@@ -312,6 +408,18 @@ class ContractDashboard {
             `;
             tbody.appendChild(tr);
         });
+
+        // Update table header to show count
+        const tableHeader = document.querySelector('.table-section h3');
+        const totalCount = this.activeFilter 
+            ? dataToShow.length 
+            : this.processedData.length;
+        
+        if (this.activeFilter) {
+            tableHeader.textContent = `Contract Details - ${this.activeFilter} (${totalCount} contracts)`;
+        } else {
+            tableHeader.textContent = `Contract Details (${totalCount} contracts)`;
+        }
     }
 
     filterTable(searchTerm) {
