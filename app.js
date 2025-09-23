@@ -123,35 +123,82 @@ class ContractDashboard {
         document.getElementById('columnSection').classList.remove('hidden');
     }
 
+    // 🔧 FIXED: Smart date parsing function that handles multiple formats
+    parseDate(dateStr) {
+        if (!dateStr) return null;
+        
+        // Handle Excel numeric dates (days since 1900-01-01)
+        if (typeof dateStr === 'number') {
+            return new Date((dateStr - 25569) * 86400 * 1000);
+        }
+        
+        // Convert to string and clean it
+        dateStr = String(dateStr).trim();
+        
+        // Try different date formats
+        let date = null;
+        
+        // Format 1: DD-MM-YYYY or DD/MM/YYYY
+        if (dateStr.match(/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/)) {
+            const parts = dateStr.split(/[-\/]/);
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            
+            // Validate date components
+            if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+                date = new Date(year, month - 1, day); // month is 0-indexed
+            }
+        }
+        
+        // Format 2: YYYY-MM-DD (ISO format)
+        else if (dateStr.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+            date = new Date(dateStr);
+        }
+        
+        // Format 3: MM/DD/YYYY (US format)
+        else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+            date = new Date(dateStr);
+        }
+        
+        // Format 4: Try standard Date parsing as fallback
+        else {
+            date = new Date(dateStr);
+        }
+        
+        // Check if date is valid
+        if (date && !isNaN(date.getTime())) {
+            return date;
+        }
+        
+        return null;
+    }
+
     processContractData() {
         const selectedColumn = document.getElementById('dateColumnSelect').value;
         if (!selectedColumn) return;
 
         try {
-            this.processedData = this.data.map((row, index) => {
+            this.processedData = [];
+            
+            this.data.forEach((row, index) => {
                 const expiryDateStr = row[selectedColumn];
-                let expiryDate;
+                const expiryDate = this.parseDate(expiryDateStr);
                 
-                if (typeof expiryDateStr === 'number') {
-                    expiryDate = new Date((expiryDateStr - 25569) * 86400 * 1000);
-                } else {
-                    expiryDate = new Date(expiryDateStr);
-                }
-                
-                if (isNaN(expiryDate)) {
-                    throw new Error(`Invalid date in row ${index + 1}: ${expiryDateStr}`);
+                if (!expiryDate) {
+                    throw new Error(`Invalid date in row ${index + 1}: ${expiryDateStr}. Please use DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD format.`);
                 }
                 
                 const daysLeft = Math.ceil((expiryDate - this.currentDate) / (1000 * 60 * 60 * 24));
                 const bucket = this.categorizeContract(daysLeft);
                 
-                return {
+                this.processedData.push({
                     ...row,
                     expiry_date: expiryDate.toLocaleDateString(),
                     days_left: daysLeft,
                     bucket: bucket,
                     priority: this.getPriority(bucket)
-                };
+                });
             });
             
             this.updateDashboard();
@@ -251,8 +298,14 @@ class ContractDashboard {
         
         this.processedData.forEach(row => {
             const tr = document.createElement('tr');
+            
+            // Get first column that's not the date fields we added
+            const firstColumn = Object.keys(row).find(key => 
+                key !== 'expiry_date' && key !== 'days_left' && key !== 'bucket' && key !== 'priority'
+            );
+            
             tr.innerHTML = `
-                <td>${row.contract_id || 'N/A'}</td>
+                <td>${row[firstColumn] || 'N/A'}</td>
                 <td>${row.expiry_date}</td>
                 <td>${row.days_left}</td>
                 <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
