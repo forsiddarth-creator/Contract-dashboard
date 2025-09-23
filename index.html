@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contract Expiry Tracking Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -41,12 +41,24 @@
         <!-- Column Selection -->
         <section id="columnSection" class="column-section card hidden">
             <div class="card__body">
-                <h3>Select Expiry Date Column</h3>
-                <p>Which column contains your contract expiry dates?</p>
-                <div class="form-group">
-                    <select id="dateColumnSelect" class="form-select">
-                        <option value="">Choose a column...</option>
-                    </select>
+                <h3>Configure Your Dashboard</h3>
+                <p>Choose which columns to use for your contract tracking:</p>
+                
+                <div class="column-config">
+                    <div class="form-group">
+                        <label for="dateColumnSelect">📅 Expiry Date Column:</label>
+                        <select id="dateColumnSelect" class="form-select">
+                            <option value="">Choose expiry date column...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="displayColumnSelect">🏷️ Contract/Equipment Name Column:</label>
+                        <select id="displayColumnSelect" class="form-select">
+                            <option value="">Choose what to display in table...</option>
+                        </select>
+                    </div>
+                    
                     <button id="processDataBtn" class="btn btn-primary" disabled>Process Data</button>
                 </div>
             </div>
@@ -77,7 +89,7 @@
             <!-- Chart Section -->
             <div class="chart-section card">
                 <div class="card__body">
-                    <h3>Contract Distribution</h3>
+                    <h3>Contract Distribution - Click bars to filter table</h3>
                     <canvas id="contractChart"></canvas>
                 </div>
             </div>
@@ -93,7 +105,8 @@
                         <table id="contractTable" class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Contract</th>
+                                    <th>Sl.No</th>
+                                    <th id="dynamicHeader">Contract/Equipment</th>
                                     <th>Expiry Date</th>
                                     <th>Days Left</th>
                                     <th>Priority</th>
