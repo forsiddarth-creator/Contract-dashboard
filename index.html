@@ -1,53 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Contract Expiry Tracking Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Expiry Tracking Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <h1>Contract Expiry Tracking Dashboard</h1>
-      <div class="current-date">
-        <span class="date-label">Reference Date:</span>
-        <span id="currentDate"></span>
-      </div>
-    </header>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Contract Expiry Tracking Dashboard</h1>
+            <div class="current-date">
+                <span class="date-label">Reference Date:</span>
+                <span id="currentDate"></span>
+            </div>
+        </header>
 
-    <!-- Upload Section -->
-    <section id="uploadSection" class="upload-section card">
-      <div class="card__body">
-        <h2>Upload Your Contract Data</h2>
-        <p class="instruction">
-          Drag and drop your Excel file here or click to browse. Make sure your
-          file contains contract expiry dates!
-        </p>
+        <!-- Upload Section -->
+        <section id="uploadSection" class="upload-section card">
+            <div class="card__body">
+                <h2>Upload Your Contract Data</h2>
+                <p class="instruction">Drag and drop your Excel file here or click to browse. Make sure your file contains contract expiry dates!</p>
+                
+                <div class="file-upload-area" id="fileUploadArea">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <strong>Drop your Excel file here</strong>
+                        <br>or click to browse
+                    </div>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" class="file-input">
+                </div>
+                
+                <div id="fileInfo" class="file-info hidden"></div>
+            </div>
+        </section>
 
-        <div class="file-upload-area" id="fileUploadArea">
-          <div class="upload-icon">📁</div>
-          <div class="upload-text">
-            <strong>Drop your Excel file here</strong><br />or click to browse
-          </div>
-          <input
-            type="file"
-            id="fileInput"
-            accept=".xlsx,.xls"
-            class="file-input"
-          />
-        </div>
+        <!-- Column Selection -->
+        <section id="columnSection" class="column-section card hidden">
+            <div class="card__body">
+                <h3>Select Expiry Date Column</h3>
+                <p>Which column contains your contract expiry dates?</p>
+                <div class="form-group">
+                    <select id="dateColumnSelect" class="form-select">
+                        <option value="">Choose a column...</option>
+                    </select>
+                    <button id="processDataBtn" class="btn btn-primary" disabled>Process Data</button>
+                </div>
+            </div>
+        </section>
 
-        <div id="fileInfo" class="file-info hidden"></div>
-      </div>
-    </section>
+        <!-- Dashboard Section -->
+        <section id="dashboardSection" class="dashboard-section hidden">
+            <!-- Summary Cards -->
+            <div class="summary-cards">
+                <div class="metric-card expired">
+                    <div class="metric-number" id="expiredCount">0</div>
+                    <div class="metric-label">Expired</div>
+                </div>
+                <div class="metric-card urgent">
+                    <div class="metric-number" id="urgentCount">0</div>
+                    <div class="metric-label">0-90 Days</div>
+                </div>
+                <div class="metric-card medium">
+                    <div class="metric-number" id="mediumCount">0</div>
+                    <div class="metric-label">91-180 Days</div>
+                </div>
+                <div class="metric-card low">
+                    <div class="metric-number" id="lowCount">0</div>
+                    <div class="metric-label">>180 Days</div>
+                </div>
+            </div>
 
-    <!-- Column Selection -->
-    <section id="columnSection" class="column-section card hidden">
-      <div class="card__body">
-        <h3>Select Expiry Date Column</h3>
-        <p>Which column contains your contract expiry dates?</p>
-        <div class="form-group">
+            <!-- Chart Section -->
+            <div class="chart-section card">
+                <div class="card
