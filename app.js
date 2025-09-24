@@ -5,12 +5,12 @@ class ContractDashboard {
         this.chart = null;
         this.currentDate = new Date();
         this.activeFilter = null;
-        this.displayColumn = null;
         
         this.init();
     }
 
     init() {
+        // Wait for libraries to load before initializing
         if (typeof XLSX === 'undefined' || typeof Chart === 'undefined') {
             console.log('Waiting for libraries to load...');
             setTimeout(() => this.init(), 500);
@@ -27,7 +27,6 @@ class ContractDashboard {
             const fileInput = document.getElementById('fileInput');
             const fileUploadArea = document.getElementById('fileUploadArea');
             const processDataBtn = document.getElementById('processDataBtn');
-            const searchInput = document.getElementById('searchInput');
 
             if (!fileInput || !fileUploadArea || !processDataBtn) {
                 console.error('Required elements not found');
@@ -60,10 +59,6 @@ class ContractDashboard {
             processDataBtn.addEventListener('click', () => {
                 this.processContractData().catch(err => this.showError('Data processing error: ' + err.message));
             });
-
-            if (searchInput) {
-                searchInput.addEventListener('input', (e) => this.filterTable(e.target.value));
-            }
 
         } catch (error) {
             console.error('Error setting up event listeners:', error);
@@ -129,7 +124,7 @@ class ContractDashboard {
                         
                         this.data = data;
                         this.showFileInfo(file, data.length);
-                        this.populateColumnSelects(data);
+                        this.populateColumnSelect(data);
                         this.hideError();
                         resolve(data);
                         
@@ -167,72 +162,37 @@ class ContractDashboard {
         }
     }
 
-    // 🔧 FIXED: This function was not populating both dropdowns correctly
-    populateColumnSelects(data) {
+    populateColumnSelect(data) {
         try {
             if (data.length === 0) return;
             
-            const dateSelect = document.getElementById('dateColumnSelect');
-            const displaySelect = document.getElementById('displayColumnSelect');
-            
-            if (!dateSelect || !displaySelect) {
-                console.error('Column select elements not found');
-                return;
-            }
+            const select = document.getElementById('dateColumnSelect');
+            if (!select) return;
             
             const columns = Object.keys(data[0]);
-            console.log('Available columns:', columns); // Debug log
             
-            // Clear existing options
-            dateSelect.innerHTML = '<option value="">Choose expiry date column...</option>';
-            displaySelect.innerHTML = '<option value="">Choose what to display in table...</option>';
+            select.innerHTML = '<option value="">Choose a column...</option>';
             
-            // Populate both dropdowns with all available columns
             columns.forEach(column => {
-                // Add to date column select
-                const dateOption = document.createElement('option');
-                dateOption.value = column;
-                dateOption.textContent = column;
-                dateSelect.appendChild(dateOption);
-                
-                // Add to display column select
-                const displayOption = document.createElement('option');
-                displayOption.value = column;
-                displayOption.textContent = column;
-                displaySelect.appendChild(displayOption);
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column;
+                select.appendChild(option);
             });
             
-            console.log('Date select options:', dateSelect.children.length);
-            console.log('Display select options:', displaySelect.children.length);
-            
-            // Add event listeners for validation
-            const validateSelections = () => {
+            select.addEventListener('change', () => {
                 const processBtn = document.getElementById('processDataBtn');
                 if (processBtn) {
-                    const isValid = dateSelect.value && displaySelect.value;
-                    processBtn.disabled = !isValid;
-                    console.log('Validation - Date column:', dateSelect.value, 'Display column:', displaySelect.value, 'Valid:', isValid);
+                    processBtn.disabled = !select.value;
                 }
-            };
+            });
             
-            // Remove any existing event listeners to prevent duplicates
-            dateSelect.removeEventListener('change', validateSelections);
-            displaySelect.removeEventListener('change', validateSelections);
-            
-            // Add fresh event listeners
-            dateSelect.addEventListener('change', validateSelections);
-            displaySelect.addEventListener('change', validateSelections);
-            
-            // Show the column selection section
             const columnSection = document.getElementById('columnSection');
             if (columnSection) {
                 columnSection.classList.remove('hidden');
             }
-            
-            console.log('Column selects populated successfully');
-            
         } catch (error) {
-            console.error('Error populating column selects:', error);
+            console.error('Error populating column select:', error);
             this.showError('Error setting up column selection: ' + error.message);
         }
     }
@@ -282,27 +242,18 @@ class ContractDashboard {
     async processContractData() {
         return new Promise((resolve, reject) => {
             try {
-                const dateColumn = document.getElementById('dateColumnSelect');
-                const displayColumn = document.getElementById('displayColumnSelect');
-                
-                if (!dateColumn || !dateColumn.value) {
-                    reject(new Error('Please select an expiry date column'));
-                    return;
-                }
-                
-                if (!displayColumn || !displayColumn.value) {
-                    reject(new Error('Please select a display column'));
+                const selectedColumn = document.getElementById('dateColumnSelect');
+                if (!selectedColumn || !selectedColumn.value) {
+                    reject(new Error('Please select a date column'));
                     return;
                 }
 
-                const dateColumnValue = dateColumn.value;
-                const displayColumnValue = displayColumn.value;
-                this.displayColumn = displayColumnValue;
+                const columnValue = selectedColumn.value;
                 this.processedData = [];
                 
                 for (let i = 0; i < this.data.length; i++) {
                     const row = this.data[i];
-                    const expiryDateStr = row[dateColumnValue];
+                    const expiryDateStr = row[columnValue];
                     const expiryDate = this.parseDate(expiryDateStr);
                     
                     if (!expiryDate) {
@@ -315,17 +266,12 @@ class ContractDashboard {
                     
                     this.processedData.push({
                         ...row,
-                        sl_no: i + 1,
-                        display_value: row[displayColumnValue] || 'N/A',
                         expiry_date: expiryDate.toLocaleDateString(),
                         days_left: daysLeft,
                         bucket: bucket,
                         priority: this.getPriority(bucket)
                     });
                 }
-                
-                // Update table header
-                this.updateTableHeader();
                 
                 this.activeFilter = null;
                 this.updateDashboard();
@@ -337,17 +283,6 @@ class ContractDashboard {
                 reject(error);
             }
         });
-    }
-
-    updateTableHeader() {
-        try {
-            const dynamicHeader = document.getElementById('dynamicHeader');
-            if (dynamicHeader && this.displayColumn) {
-                dynamicHeader.textContent = this.displayColumn;
-            }
-        } catch (error) {
-            console.error('Error updating table header:', error);
-        }
     }
 
     categorizeContract(daysLeft) {
@@ -417,87 +352,89 @@ class ContractDashboard {
     }
 
     updateChart() {
-        try {
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js library not loaded');
-                return;
-            }
-
-            const canvas = document.getElementById('contractChart');
-            if (!canvas) {
-                console.error('Chart canvas not found');
-                return;
-            }
-
-            const ctx = canvas.getContext('2d');
-            
-            if (this.chart) {
-                this.chart.destroy();
-                this.chart = null;
-            }
-            
-            const bucketCounts = {};
-            this.processedData.forEach(row => {
-                bucketCounts[row.bucket] = (bucketCounts[row.bucket] || 0) + 1;
-            });
-            
-            if (Object.keys(bucketCounts).length === 0) {
-                console.log('No data to display in chart');
-                return;
-            }
-            
-            const colors = {
-                'Expired': '#dc2626',
-                '0-90 days': '#f59e0b',
-                '91-180 days': '#d97706',
-                '>180 days': '#059669'
-            };
-            
-            const self = this;
-            
-            this.chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(bucketCounts),
-                    datasets: [{
-                        label: 'Number of Contracts',
-                        data: Object.values(bucketCounts),
-                        backgroundColor: Object.keys(bucketCounts).map(bucket => colors[bucket] || '#666666')
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    onClick: function(event, elements) {
-                        try {
-                            if (elements && elements.length > 0) {
-                                const elementIndex = elements[0].index;
-                                const clickedCategory = self.chart.data.labels[elementIndex];
-                                
-                                // Toggle filter
-                                if (self.activeFilter === clickedCategory) {
-                                    self.clearFilter();
-                                } else {
-                                    self.filterTableByCategory(clickedCategory);
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error handling chart click:', error);
-                        }
-                    }
-                }
-            });
-            
-        } catch (error) {
-            console.error('Error creating chart:', error);
-            this.showError('Error creating chart: ' + error.message);
+    try {
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js library not loaded');
+            return;
         }
-    }
 
+        const canvas = document.getElementById('contractChart');
+        if (!canvas) {
+            console.error('Chart canvas not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+
+        if (this.chart) {
+            this.chart.destroy();
+            this.chart = null;
+        }
+
+        // NEW ORDER: >180 days, 91-180 days, 0-90 days, Expired
+        const bucketOrder = ['>180 days', '91-180 days', '0-90 days', 'Expired'];
+
+        // Count contracts per bucket
+        const bucketCounts = { 'Expired': 0, '0-90 days': 0, '91-180 days': 0, '>180 days': 0 };
+        this.processedData.forEach(row => {
+            if (bucketCounts.hasOwnProperty(row.bucket)) {
+                bucketCounts[row.bucket]++;
+            }
+        });
+
+        // Build data arrays in the new order
+        const labels = bucketOrder;
+        const data = bucketOrder.map(key => bucketCounts[key]);
+
+        const colors = {
+            'Expired': '#dc2626',
+            '0-90 days': '#f59e0b',
+            '91-180 days': '#d97706',
+            '>180 days': '#059669'
+        };
+
+        const self = this;
+
+        this.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Number of Contracts',
+                    data: data,
+                    backgroundColor: labels.map(label => colors[label])
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                onClick: function(event, elements) {
+                    try {
+                        if (elements && elements.length > 0) {
+                            const index = elements[0].index;
+                            const category = labels[index];
+                            if (self.activeFilter === category) {
+                                self.clearFilter();
+                            } else {
+                                self.filterTableByCategory(category);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error handling chart click:', err);
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error creating chart:', error);
+        this.showError('Error creating chart: ' + error.message);
+    }
+}
     filterTableByCategory(category) {
         try {
             this.activeFilter = category;
@@ -519,51 +456,45 @@ class ContractDashboard {
     }
 
     updateTable() {
-        try {
-            const tbody = document.getElementById('tableBody');
-            if (!tbody) return;
+    try {
+        const tbody = document.getElementById('tableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        let dataToShow = this.activeFilter 
+            ? this.processedData.filter(row => row.bucket === this.activeFilter)
+            : this.processedData;
+        
+        // SORT IN ASCENDING ORDER BY DAYS LEFT
+        dataToShow = dataToShow.sort((a, b) => a.days_left - b.days_left);
+        
+        dataToShow.forEach((row, index) => {
+            const tr = document.createElement('tr');
             
-            tbody.innerHTML = '';
-            
-            const dataToShow = this.activeFilter 
-                ? this.processedData.filter(row => row.bucket === this.activeFilter)
-                : this.processedData;
-            
-            dataToShow.forEach((row, index) => {
-                const tr = document.createElement('tr');
-                
-                tr.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td>${row.display_value}</td>
-                    <td>${row.expiry_date}</td>
-                    <td>${row.days_left}</td>
-                    <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            // Update header
-            const tableHeader = document.querySelector('.table-section h3');
-            if (tableHeader) {
-                if (this.activeFilter) {
-                    tableHeader.textContent = `${this.activeFilter} Contracts (${dataToShow.length} items) - Click chart bars to filter`;
-                } else {
-                    tableHeader.textContent = `All Contracts (${this.processedData.length} items) - Click chart bars to filter`;
-                }
-            }
-        } catch (error) {
-            console.error('Error updating table:', error);
-        }
-    }
-
-    filterTable(searchTerm) {
-        const rows = document.querySelectorAll('#tableBody tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            const visible = text.includes(searchTerm.toLowerCase());
-            row.style.display = visible ? '' : 'none';
+            tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${row.display_value}</td>
+                <td>${row.expiry_date}</td>
+                <td>${row.days_left}</td>
+                <td><span class="priority-badge priority-${row.priority}">${row.bucket}</span></td>
+            `;
+            tbody.appendChild(tr);
         });
+
+        // Update header
+        const tableHeader = document.querySelector('.table-section h3');
+        if (tableHeader) {
+            if (this.activeFilter) {
+                tableHeader.textContent = `${this.activeFilter} Contracts (${dataToShow.length} items) - Sorted by Days Left (Ascending)`;
+            } else {
+                tableHeader.textContent = `All Contracts (${this.processedData.length} items) - Click chart bars to filter`;
+            }
+        }
+    } catch (error) {
+        console.error('Error updating table:', error);
     }
+}
 
     showError(message) {
         try {
