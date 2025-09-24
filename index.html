@@ -1,134 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contract Expiry Tracking Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contract Expiry Tracking Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <h1>Contract Expiry Tracking Dashboard</h1>
-            <div class="current-date">
-                <span class="date-label">Reference Date:</span>
-                <span id="currentDate"></span>
-            </div>
-        </header>
+  <div class="container">
+    <header class="header">
+      <h1>Contract Expiry Tracking Dashboard</h1>
+      <div class="current-date">
+        <span class="date-label">Reference Date:</span>
+        <span id="currentDate"></span>
+      </div>
+    </header>
 
-        <!-- Upload Section -->
-        <section id="uploadSection" class="upload-section card">
-            <div class="card__body">
-                <h2>Upload Your Contract Data</h2>
-                <p class="instruction">Drag and drop your Excel file here or click to browse. Make sure your file contains contract expiry dates!</p>
-                
-                <div class="file-upload-area" id="fileUploadArea">
-                    <div class="upload-icon">📁</div>
-                    <div class="upload-text">
-                        <strong>Drop your Excel file here</strong>
-                        <br>or click to browse
-                    </div>
-                    <input type="file" id="fileInput" accept=".xlsx,.xls" class="file-input">
-                </div>
-                
-                <div id="fileInfo" class="file-info hidden"></div>
-            </div>
-        </section>
+    <section id="uploadSection" class="upload-section card">
+      <div class="card__body">
+        <h2>Upload Your Contract Data</h2>
+        <p class="instruction">
+          Drag and drop your Excel file here or click to browse. Make sure your
+          file contains contract expiry dates!
+        </p>
+        <div class="file-upload-area" id="fileUploadArea">
+          <div class="upload-icon">📁</div>
+          <div class="upload-text">
+            <strong>Drop your Excel file here</strong><br />or click to browse
+          </div>
+          <input
+            type="file"
+            id="fileInput"
+            accept=".xlsx,.xls"
+            class="file-input"
+          />
+        </div>
+        <div id="fileInfo" class="file-info hidden"></div>
+      </div>
+    </section>
 
-        <!-- Column Selection -->
-        <section id="columnSection" class="column-section card hidden">
-            <div class="card__body">
-                <h3>Configure Your Dashboard</h3>
-                <p>Choose which columns to use for your contract tracking:</p>
-                
-                <div class="column-config">
-                    <div class="form-group">
-                        <label for="dateColumnSelect">📅 Expiry Date Column:</label>
-                        <select id="dateColumnSelect" class="form-select">
-                            <option value="">Choose expiry date column...</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="displayColumnSelect">🏷️ Contract/Equipment Name Column:</label>
-                        <select id="displayColumnSelect" class="form-select">
-                            <option value="">Choose what to display in table...</option>
-                        </select>
-                    </div>
-                    
-                    <button id="processDataBtn" class="btn btn-primary" disabled>Process Data</button>
-                </div>
-            </div>
-        </section>
+    <section id="columnSection" class="column-section card hidden">
+      <div class="card__body">
+        <h3>Configure Your Dashboard</h3>
+        <div class="column-config">
+          <div class="form-group">
+            <label for="dateColumnSelect">📅 Expiry Date Column:</label>
+            <select id="dateColumnSelect" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="displayColumnSelect">🏷️ Contract/Equipment Column:</label>
+            <select id="displayColumnSelect" class="form-select"></select>
+          </div>
+          <button id="processDataBtn" class="btn btn-primary" disabled>
+            Process Data
+          </button>
+        </div>
+      </div>
+    </section>
 
-        <!-- Dashboard Section -->
-        <section id="dashboardSection" class="dashboard-section hidden">
-            <!-- Summary Cards -->
-            <div class="summary-cards">
-                <div class="metric-card expired">
-                    <div class="metric-number" id="expiredCount">0</div>
-                    <div class="metric-label">Expired</div>
-                </div>
-                <div class="metric-card urgent">
-                    <div class="metric-number" id="urgentCount">0</div>
-                    <div class="metric-label">0-90 Days</div>
-                </div>
-                <div class="metric-card medium">
-                    <div class="metric-number" id="mediumCount">0</div>
-                    <div class="metric-label">91-180 Days</div>
-                </div>
-                <div class="metric-card low">
-                    <div class="metric-number" id="lowCount">0</div>
-                    <div class="metric-label">>180 Days</div>
-                </div>
-            </div>
+    <section id="dashboardSection" class="dashboard-section hidden">
+      <div class="summary-cards">
+        <div class="metric-card expired">
+          <div class="metric-number" id="expiredCount">0</div>
+          <div class="metric-label">Expired</div>
+        </div>
+        <div class="metric-card urgent">
+          <div class="metric-number" id="urgentCount">0</div>
+          <div class="metric-label">0-90 Days</div>
+        </div>
+        <div class="metric-card medium">
+          <div class="metric-number" id="mediumCount">0</div>
+          <div class="metric-label">91-180 Days</div>
+        </div>
+        <div class="metric-card low">
+          <div class="metric-number" id="lowCount">0</div>
+          <div class="metric-label">>180 Days</div>
+        </div>
+      </div>
 
-            <!-- Chart Section -->
-            <div class="chart-section card">
-                <div class="card__body">
-                    <h3>Contract Distribution - Click bars to filter table</h3>
-                    <canvas id="contractChart"></canvas>
-                </div>
-            </div>
+      <div class="chart-section card">
+        <div class="card__body">
+          <h3>Contract Distribution - Click bars to filter table</h3>
+          <canvas id="contractChart"></canvas>
+        </div>
+      </div>
 
-            <!-- Data Table Section -->
-            <div class="table-section card">
-                <div class="card__body">
-                    <h3>Contract Details</h3>
-                    <div class="table-controls">
-                        <input type="text" id="searchInput" placeholder="Search contracts..." class="search-input">
-                    </div>
-                    <div class="table-container">
-                        <table id="contractTable" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Sl.No</th>
-                                    <th id="dynamicHeader">Contract/Equipment</th>
-                                    <th>Expiry Date</th>
-                                    <th>Days Left</th>
-                                    <th>Priority</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
+      <div class="table-section card">
+        <div class="card__body">
+          <h3>Contract Details</h3>
+          <div class="table-controls">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="Search contracts..."
+              class="search-input"
+            />
+          </div>
+          <div class="table-container">
+            <table id="contractTable" class="data-table">
+              <thead>
+                <tr>
+                  <th>Sl.No</th>
+                  <th id="dynamicHeader">Item</th>
+                  <th>Expiry Date</th>
+                  <th>Days Left</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
 
-        <!-- Error Section -->
-        <section id="errorSection" class="error-section card hidden">
-            <div class="card__body">
-                <h3>⚠️ Error</h3>
-                <p id="errorMessage"></p>
-            </div>
-        </section>
-    </div>
+    <section id="errorSection" class="error-section card hidden">
+      <div class="card__body">
+        <h3>⚠️ Error</h3>
+        <p id="errorMessage"></p>
+      </div>
+    </section>
+  </div>
 
-    <script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
